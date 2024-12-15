@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Ping Pong Hit Counter</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    text-align: center;
+    margin-top: 50px;
+  }
+  #hits {
+    font-size: 2em;
+    margin: 20px;
+  }
+  button {
+    font-size: 1.5em;
+    padding: 10px;
+  }
+</style>
+</head>
+<body>
+
+<h1>Liczba uderzeń piłeczki pingpongowej</h1>
+<div id="hits">0</div>
+<button id="startBtn">Start</button>
+
+<script>
+  const startBtn = document.getElementById('startBtn');
+  const hitsDisplay = document.getElementById('hits');
+  let audioContext;
+  let analyser;
+  let hits = 0;
+
+  // Parametry detekcji
+  const threshold = 0.3;  // próg wykrywania uderzenia (wartość od 0 do 1)
+  let lastHitTime = 0;
+  const debounceTime = 200; // minimalny czas (ms) między kolejnymi uderzeniami
+
+  startBtn.addEventListener('click', async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      startBtn.disabled = true;
+      startAudioAnalysis(stream);
+    } catch (err) {
+      console.error('Błąd uzyskania dostępu do mikrofonu:', err);
+      alert('Nie udało się uzyskać dostępu do mikrofonu. Sprawdź uprawnienia.');
+    }
+  });
+
+  function startAudioAnalysis(stream) {
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const source = audioContext.createMediaStreamSource(stream);
+
+    analyser = audioContext.createAnalyser();
+    analyser.fftSize = 2048;
+    const dataArray = new Uint8Array(analyser.fftSize);
+
+    source.connect(analyser);
+
+    function analyzeAudio() {
+      analyser.getByteTimeDomainData(dataArray);
+
+      // Obliczamy RMS (Root Mean Square) aby oszacować głośność
+      let sum = 0;
+      for (let i = 0; i < dataArray.length; i++) {
+        let val = (dataArray[i] - 128) / 128.0; // Normalizacja do -1.0 ... 1.0
+        sum += val * val;
+      }
+      let rms = Math.sqrt(sum / dataArray.length);
+
+      // Wykrywanie uderzenia - jeśli rms > threshold
+      let now = performance.now();
+      if (rms > threshold && (now - lastHitTime > debounceTime)) {
+        hits++;
+        hitsDisplay.textContent = hits;
+        lastHitTime = now;
+      }
+
+      requestAnimationFrame(analyzeAudio);
+    }
+
+    analyzeAudio();
+  }
+</script>
+
+</body>
+</html>
